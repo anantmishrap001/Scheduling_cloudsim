@@ -154,9 +154,19 @@ public class AWS_Lambda_Simulation {
     // Example method to create execution schedule (dummy implementation)
     private static List<CloudletExecutionInfo> createExecutionSchedule(int brokerId) {
         List<CloudletExecutionInfo> schedule = new ArrayList<>();
+        // Create UtilizationModels
+        UtilizationModel utilizationModel = new UtilizationModelStochastic();
+        UtilizationModel bwUtilization = new UtilizationModelStochastic();
+        UtilizationModel ramUtilization = new UtilizationModelStochastic();
+
         // Populate with dummy execution data
-        schedule.add(new CloudletExecutionInfo(new Cloudlet(0, 1000L, 1, 1000L, 1L), 1, 0.0));
-        schedule.add(new CloudletExecutionInfo(new Cloudlet(1, 2000L, 1, 2000L, 1L), 2, 2.0));
+        schedule.add(new CloudletExecutionInfo(
+            new Cloudlet(0, 1000L, 1, 1000L, 1L, utilizationModel, ramUtilization, bwUtilization),
+            1, 0.0));
+        schedule.add(new CloudletExecutionInfo(
+            new Cloudlet(1, 2000L, 1, 2000L, 1L, utilizationModel, ramUtilization, bwUtilization),
+            2, 2.0));
+
         return schedule;
     }
 
