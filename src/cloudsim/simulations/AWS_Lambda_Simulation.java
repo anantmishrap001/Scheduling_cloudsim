@@ -200,7 +200,7 @@ class CloudletExecutionInfo {
         this.cloudlet = cloudlet;
         this.functionType = functionType;
         this.executionTime = executionTime;
-        this.isWarmStart = false;
+        this.isWarmStart = false;  // Default to false
         this.vmId = -1;
         this.finishTime = 0.0;
     }
@@ -222,4 +222,47 @@ class CloudletExecutionInfo {
     }
 
     public void setWarmStart(boolean isWarmStart) {
-        this.is
+        this.isWarmStart = isWarmStart;  // Correctly sets warm start status
+    }
+
+    public int getVmId() {
+        return vmId;
+    }
+
+    public void setVmId(int vmId) {
+        this.vmId = vmId;
+    }
+
+    public double getFinishTime() {
+        return finishTime;
+    }
+
+    public void setFinishTime(double finishTime) {
+        this.finishTime = finishTime;
+    }
+}
+
+// MemoryUsageRecord class to store memory usage information
+class MemoryUsageRecord {
+    private double time;
+    private double memoryUsage;
+    private boolean memoryUsed;
+
+    public MemoryUsageRecord(double time, double memoryUsage, boolean memoryUsed) {
+        this.time = time;
+        this.memoryUsage = memoryUsage;
+        this.memoryUsed = memoryUsed;
+    }
+
+    public double getTime() {
+        return time;
+    }
+
+    public double getMemoryUsage() {
+        return memoryUsage;
+    }
+
+    public boolean isMemoryUsed() {
+        return memoryUsed;
+    }
+}
