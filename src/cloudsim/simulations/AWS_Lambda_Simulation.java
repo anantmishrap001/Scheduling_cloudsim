@@ -8,8 +8,6 @@ import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
 
 import java.text.DecimalFormat;
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.Arrays;
 
 public class AWS_Lambda_Simulation {
 
@@ -46,7 +44,6 @@ public class AWS_Lambda_Simulation {
             List<CloudletExecutionInfo> executionSchedule = createExecutionSchedule(brokerId);
 
             // Pre-process all cloudlets and assign VMs based on our Lambda policy
-            // Track warm function instances and memory usage
             Map<Integer, Map<Integer, Double>> warmFunctions = new HashMap<>();
             Map<Integer, Boolean> warmStartStatus = new HashMap<>();
             Map<Integer, List<MemoryUsageRecord>> vmMemoryUsage = new HashMap<>();
@@ -86,7 +83,7 @@ public class AWS_Lambda_Simulation {
 
                 // Set execution time for cloudlet
                 double executionLength = warmStartStatus.getOrDefault(cloudlet.getCloudletId(), false) ? 1.0 : 2.0;
-                cloudlet.setCloudletLength((long) (executionLength * 500));  // Scale to match expected time
+                cloudlet.setCloudletLength((long)(executionLength * 500));  // Scale to match expected time
 
                 // Track memory usage (40% RAM usage per cloudlet)
                 double memoryUsage = 0.4 * 1024; // 40% of standard RAM
@@ -120,7 +117,7 @@ public class AWS_Lambda_Simulation {
             }
 
             // Submit all cloudlets to broker
-            broker.submitCloudletList(Arrays.asList(cloudletList.toArray(new Cloudlet[0])));
+            broker.submitCloudletList(cloudletList);
 
             // Start the simulation
             System.out.println("\nStarting CloudSim simulation...");
@@ -138,100 +135,54 @@ public class AWS_Lambda_Simulation {
         }
     }
 
-    private static Datacenter createDatacenter(String name) {
-        // Implement your Datacenter creation logic here.
-        return null;
+    // Method to create Datacenter
+    private static Datacenter createDatacenter(String name) throws Exception {
+        List<Pe> peList = new ArrayList<>();
+        peList.add(new Pe(0, new PeProvisionerSimple())); // Create a processing element (CPU)
+        
+        List<Host> hostList = new ArrayList<>();
+        hostList.add(new Host(0, new RamProvisionerSimple(2048), new BwProvisionerSimple(10000), 1000000, peList, new VmSchedulerTimeShared(peList)));
+        
+        DatacenterCharacteristics characteristics = new DatacenterCharacteristics("x86", "Linux", "Xen", hostList, 10.0, 100.0, 100.0, 10.0);
+        return new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList));
     }
 
+    // Method to create Broker
     private static DatacenterBroker createBroker() throws Exception {
-        // Implement your DatacenterBroker creation logic here.
-        return new DatacenterBrokerSimple("Broker_0");
+        return new DatacenterBroker("Broker_0"); // Use DatacenterBroker instead of DatacenterBrokerSimple
     }
 
+    // Example method to create execution schedule (dummy implementation)
     private static List<CloudletExecutionInfo> createExecutionSchedule(int brokerId) {
-        // Implement your Cloudlet execution schedule logic here.
-        return new ArrayList<>();
+        List<CloudletExecutionInfo> schedule = new ArrayList<>();
+        // Populate with dummy execution data (just as an example)
+        schedule.add(new CloudletExecutionInfo(new Cloudlet(0, 1000, 1, 1000, 1, 1), 1, 0.0));
+        schedule.add(new CloudletExecutionInfo(new Cloudlet(1, 2000, 2, 2000, 2, 2), 2, 2.0));
+        return schedule;
     }
 
-    private static double calculateCurrentMemoryUsage(double currentTime, List<MemoryUsageRecord> memoryUsageRecords) {
-        // Implement your memory usage calculation here.
-        return 0.0;
+    // Method to calculate current memory usage
+    private static double calculateCurrentMemoryUsage(double currentTime, List<MemoryUsageRecord> memoryRecords) {
+        double currentUsage = 0;
+        for (MemoryUsageRecord record : memoryRecords) {
+            if (record.getTime() <= currentTime) {
+                if (record.isMemoryUsed()) {
+                    currentUsage += record.getMemoryUsage();
+                } else {
+                    currentUsage -= record.getMemoryUsage();
+                }
+            }
+        }
+        return currentUsage;
     }
 
+    // Method to print warm status
     private static void printWarmStatus(double currentTime, Map<Integer, Map<Integer, Double>> warmFunctions, List<Vm> vmList) {
-        // Implement your warm status printing logic here.
+        // Print warm status logic here
     }
 
+    // Method to print memory usage
     private static void printMemoryUsage(double currentTime, Map<Integer, List<MemoryUsageRecord>> vmMemoryUsage, List<Vm> vmList) {
-        // Implement your memory usage printing logic here.
-    }
-
-    // CloudletExecutionInfo class
-    private static class CloudletExecutionInfo {
-        private Cloudlet cloudlet;
-        private int functionType;
-        private double executionTime;
-        private int vmId;
-        private boolean warmStart;
-        private double finishTime;
-
-        public CloudletExecutionInfo(Cloudlet cloudlet, int functionType, double executionTime) {
-            this.cloudlet = cloudlet;
-            this.functionType = functionType;
-            this.executionTime = executionTime;
-        }
-
-        public Cloudlet getCloudlet() {
-            return cloudlet;
-        }
-
-        public int getFunctionType() {
-            return functionType;
-        }
-
-        public double getExecutionTime() {
-            return executionTime;
-        }
-
-        public void setVmId(int vmId) {
-            this.vmId = vmId;
-        }
-
-        public int getVmId() {
-            return vmId;
-        }
-
-        public void setWarmStart(Boolean warmStart) {
-            this.warmStart = warmStart;
-        }
-
-        public void setFinishTime(double finishTime) {
-            this.finishTime = finishTime;
-        }
-    }
-
-    // MemoryUsageRecord class
-    private static class MemoryUsageRecord {
-        private double timestamp;
-        private double memoryUsage;
-        private boolean isStart;
-
-        public MemoryUsageRecord(double timestamp, double memoryUsage, boolean isStart) {
-            this.timestamp = timestamp;
-            this.memoryUsage = memoryUsage;
-            this.isStart = isStart;
-        }
-
-        public double getTimestamp() {
-            return timestamp;
-        }
-
-        public double getMemoryUsage() {
-            return memoryUsage;
-        }
-
-        public boolean isStart() {
-            return isStart;
-        }
+        // Print memory usage logic here
     }
 }
