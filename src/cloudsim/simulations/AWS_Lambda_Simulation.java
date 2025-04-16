@@ -5,7 +5,6 @@ import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
-import org.cloudbus.cloudsim.utilizationmodels.UtilizationModelStochastic;
 
 import java.util.*;
 
@@ -156,8 +155,8 @@ public class AWS_Lambda_Simulation {
     private static List<CloudletExecutionInfo> createExecutionSchedule(int brokerId) {
         List<CloudletExecutionInfo> schedule = new ArrayList<>();
         // Populate with dummy execution data
-        schedule.add(new CloudletExecutionInfo(new Cloudlet(0, 1000L, 1, 1000L, 1L, new UtilizationModelStochastic(), new UtilizationModelStochastic(), new UtilizationModelStochastic()), 1, 0.0));
-        schedule.add(new CloudletExecutionInfo(new Cloudlet(1, 2000L, 1, 2000L, 1L, new UtilizationModelStochastic(), new UtilizationModelStochastic(), new UtilizationModelStochastic()), 2, 2.0));
+        schedule.add(new CloudletExecutionInfo(new Cloudlet(0, 1000L, 1, 1000L, 1L), 1, 0.0));
+        schedule.add(new CloudletExecutionInfo(new Cloudlet(1, 2000L, 1, 2000L, 1L), 2, 2.0));
         return schedule;
     }
 
