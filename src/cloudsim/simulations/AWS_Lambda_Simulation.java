@@ -5,8 +5,8 @@ import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
+import org.cloudbus.cloudsim.utilizationmodels.UtilizationModelStochastic;
 
-import java.text.DecimalFormat;
 import java.util.*;
 
 public class AWS_Lambda_Simulation {
@@ -138,26 +138,26 @@ public class AWS_Lambda_Simulation {
     // Method to create Datacenter
     private static Datacenter createDatacenter(String name) throws Exception {
         List<Pe> peList = new ArrayList<>();
-        peList.add(new Pe(0, new PeProvisionerSimple())); // Create a processing element (CPU)
+        peList.add(new Pe(0, new PeProvisionerSimple(1000.0))); // Create a processing element (CPU)
         
         List<Host> hostList = new ArrayList<>();
         hostList.add(new Host(0, new RamProvisionerSimple(2048), new BwProvisionerSimple(10000), 1000000, peList, new VmSchedulerTimeShared(peList)));
         
-        DatacenterCharacteristics characteristics = new DatacenterCharacteristics("x86", "Linux", "Xen", hostList, 10.0, 100.0, 100.0, 10.0);
-        return new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList));
+        DatacenterCharacteristics characteristics = new DatacenterCharacteristics("x86", "Linux", "Xen", hostList, 10.0, 100.0, 100.0, 10.0, 0.0);
+        return new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList), new ArrayList<>(), 0.0);
     }
 
     // Method to create Broker
     private static DatacenterBroker createBroker() throws Exception {
-        return new DatacenterBroker("Broker_0"); // Use DatacenterBroker instead of DatacenterBrokerSimple
+        return new DatacenterBroker("Broker_0");
     }
 
     // Example method to create execution schedule (dummy implementation)
     private static List<CloudletExecutionInfo> createExecutionSchedule(int brokerId) {
         List<CloudletExecutionInfo> schedule = new ArrayList<>();
-        // Populate with dummy execution data (just as an example)
-        schedule.add(new CloudletExecutionInfo(new Cloudlet(0, 1000, 1, 1000, 1, 1), 1, 0.0));
-        schedule.add(new CloudletExecutionInfo(new Cloudlet(1, 2000, 2, 2000, 2, 2), 2, 2.0));
+        // Populate with dummy execution data
+        schedule.add(new CloudletExecutionInfo(new Cloudlet(0, 1000L, 1, 1000L, 1L, new UtilizationModelStochastic(), new UtilizationModelStochastic(), new UtilizationModelStochastic()), 1, 0.0));
+        schedule.add(new CloudletExecutionInfo(new Cloudlet(1, 2000L, 1, 2000L, 1L, new UtilizationModelStochastic(), new UtilizationModelStochastic(), new UtilizationModelStochastic()), 2, 2.0));
         return schedule;
     }
 
@@ -186,3 +186,38 @@ public class AWS_Lambda_Simulation {
         // Print memory usage logic here
     }
 }
+
+// CloudletExecutionInfo class to store cloudlet execution details
+class CloudletExecutionInfo {
+    private Cloudlet cloudlet;
+    private int functionType;
+    private double executionTime;
+    private boolean isWarmStart;
+    private int vmId;
+
+    public CloudletExecutionInfo(Cloudlet cloudlet, int functionType, double executionTime) {
+        this.cloudlet = cloudlet;
+        this.functionType = functionType;
+        this.executionTime = executionTime;
+        this.isWarmStart = false;
+        this.vmId = -1;
+    }
+
+    public Cloudlet getCloudlet() {
+        return cloudlet;
+    }
+
+    public int getFunctionType() {
+        return functionType;
+    }
+
+    public double getExecutionTime() {
+        return executionTime;
+    }
+
+    public boolean isWarmStart() {
+        return isWarmStart;
+    }
+
+    public void setWarmStart(boolean isWarmStart) {
+        this.isWarmStart
