@@ -194,6 +194,7 @@ class CloudletExecutionInfo {
     private double executionTime;
     private boolean isWarmStart;
     private int vmId;
+    private double finishTime;
 
     public CloudletExecutionInfo(Cloudlet cloudlet, int functionType, double executionTime) {
         this.cloudlet = cloudlet;
@@ -201,6 +202,7 @@ class CloudletExecutionInfo {
         this.executionTime = executionTime;
         this.isWarmStart = false;
         this.vmId = -1;
+        this.finishTime = 0.0;
     }
 
     public Cloudlet getCloudlet() {
@@ -220,4 +222,4 @@ class CloudletExecutionInfo {
     }
 
     public void setWarmStart(boolean isWarmStart) {
-        this.isWarmStart
+        this.is
