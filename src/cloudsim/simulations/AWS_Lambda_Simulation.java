@@ -10,7 +10,7 @@ public class AWS_Lambda_Simulation {
     private static Map<Integer, Boolean> warmStartStatus = new HashMap<>();
     private static Map<Integer, List<Cloudlet>> warmFunctions = new HashMap<>();
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         CloudSim simulation = new CloudSim();
 
         int brokerId = 0;
