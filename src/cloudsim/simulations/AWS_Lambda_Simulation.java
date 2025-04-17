@@ -5,7 +5,6 @@ import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.provisioners.*;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class AWS_Lambda_Simulation {
     private static Map<Integer, Boolean> warmStartStatus = new HashMap<>();
@@ -103,12 +102,7 @@ public class AWS_Lambda_Simulation {
     private static List<CloudletExecutionInfo> createExecutionSchedule(int brokerId) {
         List<CloudletExecutionInfo> schedule = new ArrayList<>();
 
-        UtilizationModel utilizationModel = new UtilizationModel() {
-            @Override
-            public double getUtilization(double time) {
-                return 1.0;
-            }
-        };
+        UtilizationModel utilizationModel = time -> 1.0;
 
         Cloudlet c1 = new Cloudlet(0, 1000, 1, 1000, 300, utilizationModel, utilizationModel, utilizationModel);
         c1.setUserId(brokerId);
