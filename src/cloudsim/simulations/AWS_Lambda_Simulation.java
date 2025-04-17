@@ -11,7 +11,7 @@ public class AWS_Lambda_Simulation {
     private static Map<Integer, List<Cloudlet>> warmFunctions = new HashMap<>();
 
     public static void main(String[] args) throws Exception {
-        CloudSim simulation = new CloudSim();
+        CloudSim.init(1, Calendar.getInstance(), false);  // Initialize the CloudSim framework
 
         int brokerId = 0;
         Datacenter datacenter = createDatacenter("Datacenter_0");
@@ -52,12 +52,14 @@ public class AWS_Lambda_Simulation {
 
         CloudSim.startSimulation();
 
-        printMemoryUsage(simulation.clock(), vmMemoryUsage, vmList);
+        printMemoryUsage(CloudSim.clock(), vmMemoryUsage, vmList);
 
         for (Cloudlet cloudlet : broker.getCloudletReceivedList()) {
             System.out.printf("Cloudlet %d executed on VM %d with status %s\n",
                     cloudlet.getCloudletId(), cloudlet.getVmId(), cloudlet.getStatus());
         }
+
+        CloudSim.stopSimulation(); // Ensure the simulation stops
     }
 
     private static Datacenter createDatacenter(String name) {
