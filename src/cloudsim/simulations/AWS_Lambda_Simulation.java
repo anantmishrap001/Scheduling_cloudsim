@@ -2,276 +2,197 @@ package cloudsim.simulations;
 
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudSim;
-import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
-import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
-import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
+import org.cloudbus.cloudsim.provisioners.*;
+import org.cloudbus.cloudsim.utilizationmodels.UtilizationModel;
+import org.cloudbus.cloudsim.utilizationmodels.UtilizationModelStochastic;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class AWS_Lambda_Simulation {
-
-    // Warm start duration in seconds
-    private static final double WARM_START_DURATION = 5.0;
+    private static Map<Integer, Boolean> warmStartStatus = new HashMap<>();
+    private static Map<Integer, List<Cloudlet>> warmFunctions = new HashMap<>();
 
     public static void main(String[] args) {
-        try {
-            int numUsers = 1;
-            Calendar calendar = Calendar.getInstance();
-            boolean traceFlag = false;
+        CloudSim simulation = new CloudSim();
 
-            // Initialize CloudSim
-            CloudSim.init(numUsers, calendar, traceFlag);
+        int brokerId = 0;
+        Datacenter datacenter = createDatacenter("Datacenter_0");
+        DatacenterBroker broker = new DatacenterBroker("Broker_0");
+        brokerId = broker.getId();
 
-            // Create Datacenter
-            Datacenter datacenter = createDatacenter("Datacenter_0");
+        List<Vm> vmList = createVms(brokerId);
+        List<CloudletExecutionInfo> executionSchedule = createExecutionSchedule(brokerId);
 
-            // Create broker
-            DatacenterBroker broker = createBroker();
-            int brokerId = broker.getId();
+        Map<Integer, List<MemoryUsageRecord>> vmMemoryUsage = new HashMap<>();
+        for (Vm vm : vmList) {
+            vmMemoryUsage.put(vm.getId(), new ArrayList<>());
+        }
 
-            // Create VMs (initially create 2)
-            List<Vm> vmList = new ArrayList<>();
-            Vm vm1 = new Vm(0, brokerId, 1000, 2, 1024, 10000, 10000, "Xen", new CloudletSchedulerTimeShared());
-            Vm vm2 = new Vm(1, brokerId, 1000, 2, 1024, 10000, 10000, "Xen", new CloudletSchedulerTimeShared());
-            vmList.add(vm1);
-            vmList.add(vm2);
+        executionSchedule.sort(Comparator.comparingDouble(CloudletExecutionInfo::getExecutionTime));
 
-            // Track the next VM ID to use when creating new VMs
-            int nextVmId = 2;
+        for (CloudletExecutionInfo info : executionSchedule) {
+            double currentTime = info.getExecutionTime();
+            Cloudlet cloudlet = info.getCloudlet();
+            Vm selectedVm = vmList.get(info.getVmId() % vmList.size());
 
-            // Create execution schedule with hardcoded timing
-            List<CloudletExecutionInfo> executionSchedule = createExecutionSchedule(brokerId);
+            boolean isWarm = warmStartStatus.getOrDefault(cloudlet.getCloudletId(), false);
+            double executionLength = isWarm ? 1.0 : 2.0;
+            cloudlet.setCloudletLength((long)(executionLength * 500));
+            info.setWarmStart(isWarm);
 
-            // Pre-process all cloudlets and assign VMs based on our Lambda policy
-            Map<Integer, Map<Integer, Double>> warmFunctions = new HashMap<>();
-            Map<Integer, Boolean> warmStartStatus = new HashMap<>();
-            Map<Integer, List<MemoryUsageRecord>> vmMemoryUsage = new HashMap<>();
+            double memoryUsage = selectedVm.getRam();
+            vmMemoryUsage.get(selectedVm.getId()).add(new MemoryUsageRecord(currentTime, memoryUsage, true));
+            vmMemoryUsage.get(selectedVm.getId()).add(new MemoryUsageRecord(currentTime + executionLength, memoryUsage, false));
 
-            for (Vm vm : vmList) {
-                vmMemoryUsage.put(vm.getId(), new ArrayList<>());
-            }
+            cloudlet.setVmId(selectedVm.getId());
+            broker.submitCloudletList(Collections.singletonList(cloudlet));
 
-            // Submit initial VM list
-            broker.submitVmList(vmList);
+            warmStartStatus.put(cloudlet.getCloudletId(), true);
+        }
 
-            // Sort the execution schedule by time
-            executionSchedule.sort(Comparator.comparingDouble(CloudletExecutionInfo::getExecutionTime));
+        datacenter.setVmAllocationPolicy(new VmAllocationPolicySimple(new ArrayList<>(datacenter.getHostList())));
+        broker.submitVmList(vmList);
 
-            // Implementing Round-Robin scheduling
-            int currentVmIndex = 0;
-            double currentTime = 0.0;
+        simulation.start();
 
-            for (CloudletExecutionInfo info : executionSchedule) {
-                Cloudlet cloudlet = info.getCloudlet();
-                int functionType = info.getFunctionType();
-                currentTime = info.getExecutionTime();  // Simulation time for this execution
+        printMemoryUsage(simulation.clock(), vmMemoryUsage, vmList);
 
-                System.out.println("\nTime: " + currentTime + " - Processing function execution for cloudlet " +
-                        cloudlet.getCloudletId() + " (Function Type: " + functionType + ")");
-
-                // Round-Robin VM selection logic
-                Vm selectedVm = vmList.get(currentVmIndex);
-                currentVmIndex = (currentVmIndex + 1) % vmList.size();  // Cycle through VMs
-
-                // Assign selected VM to cloudlet
-                cloudlet.setVmId(selectedVm.getId());
-
-                // Update warm function tracking
-                warmFunctions.putIfAbsent(functionType, new HashMap<>());
-                warmFunctions.get(functionType).put(selectedVm.getId(), currentTime);
-
-                // Set execution time for cloudlet
-                double executionLength = warmStartStatus.getOrDefault(cloudlet.getCloudletId(), false) ? 1.0 : 2.0;
-                cloudlet.setCloudletLength((long)(executionLength * 500));  // Scale to match expected time
-
-                // Track memory usage (40% RAM usage per cloudlet)
-                double memoryUsage = 0.4 * 1024; // 40% of standard RAM
-                vmMemoryUsage.get(selectedVm.getId()).add(new MemoryUsageRecord(currentTime, memoryUsage, true));
-                vmMemoryUsage.get(selectedVm.getId()).add(new MemoryUsageRecord(currentTime + executionLength, memoryUsage, false));
-
-                // Store additional information
-                info.setVmId(selectedVm.getId());
-                info.setWarmStart(warmStartStatus.get(cloudlet.getCloudletId()));
-                info.setFinishTime(currentTime + executionLength);
-
-                // Print memory usage for this VM
-                double currentMemoryUsage = calculateCurrentMemoryUsage(currentTime, vmMemoryUsage.get(selectedVm.getId()));
-                double totalMemory = 1024; // Standard VM RAM
-                double memoryPercentage = (currentMemoryUsage / totalMemory) * 100;
-                System.out.println("VM " + selectedVm.getId() + " memory usage: " +
-                        String.format("%.2f", currentMemoryUsage) + "MB / " +
-                        totalMemory + "MB (" + String.format("%.1f", memoryPercentage) + "%)");
-
-                // Print VM warmup status
-                printWarmStatus(currentTime, warmFunctions, vmList);
-
-                // Print VM memory status
-                printMemoryUsage(currentTime, vmMemoryUsage, vmList);
-            }
-
-            // Create a list for all the processed cloudlets
-            List<Cloudlet> cloudletList = new ArrayList<>();
-            for (CloudletExecutionInfo info : executionSchedule) {
-                cloudletList.add(info.getCloudlet());
-            }
-
-            // Submit all cloudlets to broker
-            broker.submitCloudletList(cloudletList);
-
-            // Start the simulation
-            System.out.println("\nStarting CloudSim simulation...");
-            CloudSim.startSimulation();
-
-            // Stop the simulation
-            CloudSim.stopSimulation();
-
-            // Print results
-            List<Cloudlet> finishedCloudlets = broker.getCloudletReceivedList();
-            System.out.println("Simulation completed.");
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        for (Cloudlet cloudlet : broker.getCloudletReceivedList()) {
+            System.out.printf("Cloudlet %d executed on VM %d with status %s\n",
+                    cloudlet.getCloudletId(), cloudlet.getVmId(), cloudlet.getStatus());
         }
     }
 
-    // Method to create Datacenter
-    private static Datacenter createDatacenter(String name) throws Exception {
-        List<Pe> peList = new ArrayList<>();
-        peList.add(new Pe(0, new PeProvisionerSimple(1000.0))); // Create a processing element (CPU)
-        
+    private static Datacenter createDatacenter(String name) {
         List<Host> hostList = new ArrayList<>();
-        hostList.add(new Host(0, new RamProvisionerSimple(2048), new BwProvisionerSimple(10000), 1000000, peList, new VmSchedulerTimeShared(peList)));
-        
-        DatacenterCharacteristics characteristics = new DatacenterCharacteristics("x86", "Linux", "Xen", hostList, 10.0, 100.0, 100.0, 10.0, 0.0);
-        return new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList), new ArrayList<>(), 0.0);
+        List<Pe> peList = new ArrayList<>();
+        peList.add(new Pe(0, new PeProvisionerSimple(1000)));
+
+        int hostId = 0;
+        int ram = 2048;
+        long storage = 1000000;
+        int bw = 10000;
+
+        hostList.add(new Host(
+                hostId,
+                new RamProvisionerSimple(ram),
+                new BwProvisionerSimple(bw),
+                storage,
+                peList,
+                new VmSchedulerTimeShared(peList)
+        ));
+
+        DatacenterCharacteristics characteristics = new DatacenterCharacteristics(
+                "x86", "Linux", "Xen", hostList, 10.0, 3.0, 0.05, 0.001, 0.0);
+
+        try {
+            return new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList), new LinkedList<>(), 0);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
-    // Method to create Broker
-    private static DatacenterBroker createBroker() throws Exception {
-        return new DatacenterBroker("Broker_0");
+    private static List<Vm> createVms(int brokerId) {
+        List<Vm> vmList = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            vmList.add(new Vm(i, brokerId, 1000, 1, 512, 1000, 10000, "Xen", new CloudletSchedulerTimeShared()));
+        }
+        return vmList;
     }
 
-    // Example method to create execution schedule (dummy implementation)
     private static List<CloudletExecutionInfo> createExecutionSchedule(int brokerId) {
         List<CloudletExecutionInfo> schedule = new ArrayList<>();
-        // Create UtilizationModels
-        UtilizationModel utilizationModel = new UtilizationModelStochastic();
-        UtilizationModel bwUtilization = new UtilizationModelStochastic();
-        UtilizationModel ramUtilization = new UtilizationModelStochastic();
 
-        // Populate with dummy execution data
-        schedule.add(new CloudletExecutionInfo(
-            new Cloudlet(0, 1000L, 1, 1000L, 1L, utilizationModel, ramUtilization, bwUtilization),
-            1, 0.0));
-        schedule.add(new CloudletExecutionInfo(
-            new Cloudlet(1, 2000L, 1, 2000L, 1L, utilizationModel, ramUtilization, bwUtilization),
-            2, 2.0));
+        UtilizationModel utilizationModel = new UtilizationModelStochastic();
+
+        Cloudlet c1 = new Cloudlet(0, 1000, 1, 1000, 300, utilizationModel, utilizationModel, utilizationModel);
+        c1.setUserId(brokerId);
+        schedule.add(new CloudletExecutionInfo(c1, 1, 0.0));
+
+        Cloudlet c2 = new Cloudlet(1, 2000, 1, 2000, 300, utilizationModel, utilizationModel, utilizationModel);
+        c2.setUserId(brokerId);
+        schedule.add(new CloudletExecutionInfo(c2, 2, 2.0));
 
         return schedule;
     }
 
-    // Method to calculate current memory usage
+    private static void printMemoryUsage(double currentTime, Map<Integer, List<MemoryUsageRecord>> vmMemoryUsage, List<Vm> vmList) {
+        System.out.println("Memory Usage at time " + currentTime);
+        for (Vm vm : vmList) {
+            List<MemoryUsageRecord> records = vmMemoryUsage.get(vm.getId());
+            double totalUsage = calculateCurrentMemoryUsage(currentTime, records);
+            System.out.printf("VM %d: %.2f MB used\n", vm.getId(), totalUsage);
+        }
+    }
+
     private static double calculateCurrentMemoryUsage(double currentTime, List<MemoryUsageRecord> memoryRecords) {
-        double currentUsage = 0;
+        double usage = 0.0;
         for (MemoryUsageRecord record : memoryRecords) {
-            if (record.getTime() <= currentTime) {
-                if (record.isMemoryUsed()) {
-                    currentUsage += record.getMemoryUsage();
-                } else {
-                    currentUsage -= record.getMemoryUsage();
-                }
+            if (record.isStart() && record.getTime() <= currentTime) {
+                usage += record.getMemoryUsed();
+            } else if (!record.isStart() && record.getTime() <= currentTime) {
+                usage -= record.getMemoryUsed();
             }
         }
-        return currentUsage;
-    }
-
-    // Method to print warm status
-    private static void printWarmStatus(double currentTime, Map<Integer, Map<Integer, Double>> warmFunctions, List<Vm> vmList) {
-        // Print warm status logic here
-    }
-
-    // Method to print memory usage
-    private static void printMemoryUsage(double currentTime, Map<Integer, List<MemoryUsageRecord>> vmMemoryUsage, List<Vm> vmList) {
-        // Print memory usage logic here
+        return usage;
     }
 }
 
-// CloudletExecutionInfo class to store cloudlet execution details
 class CloudletExecutionInfo {
     private Cloudlet cloudlet;
-    private int functionType;
+    private int vmId;
     private double executionTime;
     private boolean isWarmStart;
-    private int vmId;
-    private double finishTime;
 
-    public CloudletExecutionInfo(Cloudlet cloudlet, int functionType, double executionTime) {
+    public CloudletExecutionInfo(Cloudlet cloudlet, int vmId, double executionTime) {
         this.cloudlet = cloudlet;
-        this.functionType = functionType;
+        this.vmId = vmId;
         this.executionTime = executionTime;
-        this.isWarmStart = false;  // Default to false
-        this.vmId = -1;
-        this.finishTime = 0.0;
     }
 
     public Cloudlet getCloudlet() {
         return cloudlet;
     }
 
-    public int getFunctionType() {
-        return functionType;
+    public int getVmId() {
+        return vmId;
     }
 
     public double getExecutionTime() {
         return executionTime;
     }
 
+    public void setWarmStart(boolean warmStart) {
+        this.isWarmStart = warmStart;
+    }
+
     public boolean isWarmStart() {
         return isWarmStart;
     }
-
-    public void setWarmStart(boolean isWarmStart) {
-        this.isWarmStart = isWarmStart;  // Correctly sets warm start status
-    }
-
-    public int getVmId() {
-        return vmId;
-    }
-
-    public void setVmId(int vmId) {
-        this.vmId = vmId;
-    }
-
-    public double getFinishTime() {
-        return finishTime;
-    }
-
-    public void setFinishTime(double finishTime) {
-        this.finishTime = finishTime;
-    }
 }
 
-// MemoryUsageRecord class to store memory usage information
 class MemoryUsageRecord {
     private double time;
-    private double memoryUsage;
-    private boolean memoryUsed;
+    private double memoryUsed;
+    private boolean isStart;
 
-    public MemoryUsageRecord(double time, double memoryUsage, boolean memoryUsed) {
+    public MemoryUsageRecord(double time, double memoryUsed, boolean isStart) {
         this.time = time;
-        this.memoryUsage = memoryUsage;
         this.memoryUsed = memoryUsed;
+        this.isStart = isStart;
     }
 
     public double getTime() {
         return time;
     }
 
-    public double getMemoryUsage() {
-        return memoryUsage;
+    public double getMemoryUsed() {
+        return memoryUsed;
     }
 
-    public boolean isMemoryUsed() {
-        return memoryUsed;
+    public boolean isStart() {
+        return isStart;
     }
 }
