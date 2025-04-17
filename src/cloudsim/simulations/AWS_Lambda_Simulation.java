@@ -48,10 +48,9 @@ public class AWS_Lambda_Simulation {
             warmStartStatus.put(cloudlet.getCloudletId(), true);
         }
 
-        datacenter.setVmAllocationPolicy(new VmAllocationPolicySimple(new ArrayList<>(datacenter.getHostList())));
         broker.submitVmList(vmList);
 
-        simulation.start();
+        CloudSim.startSimulation();
 
         printMemoryUsage(simulation.clock(), vmMemoryUsage, vmList);
 
